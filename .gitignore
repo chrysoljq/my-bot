@@ -1,0 +1,12 @@
+.env.prod
+
+test*
+tmp*
+nonebot_plugin_group_file_admin
+nonebot_plugin_githubcard
+temp
+mcmod
+
+plugins/dingzhen.py
+
+__pycache__
