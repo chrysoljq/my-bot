@@ -6,9 +6,9 @@ from telegram.constants import ParseMode
 
 from .matcher import forward_bot
 from .config import plugin_config
-from .vars import qq2tg, tg2qq
 from .client import ptb_app
 from .utils import fetch_file
+from plugins.datastore import db
 
 @forward_bot.handle()
 async def onebot_to_tg(event: GroupMessageEvent):
@@ -50,8 +50,13 @@ async def onebot_to_tg(event: GroupMessageEvent):
                 files_to_send.append(('photo', url))
         elif msg.type == 'reply':
             qq_id = int(msg.data.get('id'))
-            reply_tg_id = qq2tg[indx].get(qq_id)
-            logger.info(f"收到reply_tg_id: {reply_tg_id}")
+            # Check DB
+            row = await db.fetchone(
+                "SELECT tg_id FROM tg_msg_map WHERE qq_id = ? AND group_index = ?",
+                (qq_id, indx)
+            )
+            if row:
+                reply_tg_id = row['tg_id']
 
     full_text = prefix + text_buffer
     
@@ -101,12 +106,12 @@ async def onebot_to_tg(event: GroupMessageEvent):
                     sent_msg = msgs_list[0] # Just map to first one?
 
         if sent_msg:
-            # TG message ID -> QQ message ID (for reverse usage, though usually not needed if only tracking origin)
-            # Actually if someone replies to THIS TG message on TG side, we want to know it maps to the QQ message (event.message_id)
-            tg2qq[indx][sent_msg.message_id] = event.message_id
-            
-            # QQ message ID -> TG message ID
-            qq2tg[indx][event.message_id] = sent_msg.message_id
+            # Save mapping to DB
+            # QQ message ID (source) -> TG message ID (target)
+            await db.execute(
+                "INSERT INTO tg_msg_map (tg_id, qq_id, group_index) VALUES (?, ?, ?)",
+                (sent_msg.message_id, event.message_id, indx)
+            )
 
     except Exception as e:
         logger.error(f"Failed to bridge QQ -> TG: {e}")

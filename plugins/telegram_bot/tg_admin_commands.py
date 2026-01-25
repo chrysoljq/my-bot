@@ -86,6 +86,29 @@ async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📜 白名单包含 {len(ids)} 个 ID: {ids}")
 
 
+async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current chat/topic ID for configuration."""
+    chat = update.effective_chat
+    user = update.effective_user
+    msg = update.message
+    
+    if not chat:
+        return
+
+    text = f"📋 **Configuration Info**\n\n"
+    text += f"**Chat Title**: `{chat.title or 'Private'}`\n"
+    text += f"**Chat ID**: `{chat.id}`\n"
+    
+    if msg and msg.is_topic_message:
+        text += f"**Topic ID** (Thread): `{msg.message_thread_id}`\n"
+    else:
+        text += f"**Topic ID**: `None` (General)\n"
+        
+    if user:
+        text += f"\n**Your ID**: `{user.id}`"
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
 # Register handlers
 if ptb_app:
     # Commands: /add, /header, /permit ? specific naming
@@ -93,3 +116,4 @@ if ptb_app:
     ptb_app.add_handler(CommandHandler(["allow", "add"], cmd_add))
     ptb_app.add_handler(CommandHandler(["disallow", "ban", "del", "remove"], cmd_del))
     ptb_app.add_handler(CommandHandler(["whitelist", "list"], cmd_list))
+    ptb_app.add_handler(CommandHandler(["chat_info"], cmd_id))

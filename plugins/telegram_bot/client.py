@@ -10,6 +10,9 @@ if plugin_config.telegram_token:
     if plugin_config.telegram_proxy:
         ptb_app = ptb_app.proxy_url(plugin_config.telegram_proxy).get_updates_proxy_url(plugin_config.telegram_proxy)
     
+    # Increase timeouts for stability
+    ptb_app = ptb_app.connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0).get_updates_read_timeout(60.0)
+    
     ptb_app = ptb_app.build()
 else:
     ptb_app = None

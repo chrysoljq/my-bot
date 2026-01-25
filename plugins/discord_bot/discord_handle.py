@@ -4,7 +4,8 @@ from nonebot.log import logger
 from discord import Message
 from .client import client
 from .config import plugin_config
-from .vars import qq2dc, dc2qq
+from .config import plugin_config
+from plugins.datastore import db
 
 @client.event
 async def on_ready():
@@ -55,12 +56,41 @@ async def on_message(message: Message):
 
         if message.reference:
             msg_id = message.reference.message_id
-            if qq2dc[indx].get(msg_id):
-                msg = f"[CQ:reply,id={qq2dc[indx].get(msg_id)}] "+msg
+            # Check DB
+            # qq2dc was mapping[channel_index][discord_msg_id] -> qq_msg_id
+            # Wait, existing logic: if qq2dc[indx].get(msg_id): ...
+            # qq2dc maps Discord Msg ID -> QQ Msg ID? No, see below. 
+            
+            # Let's check vars.py: qq2dc: List[Dict[int, int]]
+            # Usually implies source -> target.
+            
+            # If message.reference is a Discord message, we want to know its QQ counterpart to construct [CQ:reply].
+            # So we need Discord ID -> QQ ID mapping.
+            
+            row = await db.fetchone(
+                "SELECT qq_id FROM discord_msg_map WHERE discord_id = ? AND channel_id = ?",
+                (msg_id, message.channel.id)
+            )
+            
+            if row:
+                msg = f"[CQ:reply,id={row['qq_id']}] "+msg
         
         try:
             result = await bot.send_group_msg(group_id=plugin_config.discord_forward_group[indx], message=msg)
-            dc2qq[indx][result.get('message_id')] = message.id
+            # Store mapping: QQ ID (result) -> Discord ID (message.id) ? 
+            # Original: dc2qq[indx][result.get('message_id')] = message.id
+            # This maps QQ ID -> Discord ID.
+            
+            # We should store BOTH directions or just one row.
+            # Our table has (discord_id, qq_id, channel_id).
+            # So we insert one row.
+            
+            if result and 'message_id' in result:
+                await db.execute(
+                    "INSERT INTO discord_msg_map (discord_id, qq_id, channel_id) VALUES (?, ?, ?)",
+                    (message.id, result.get('message_id'), message.channel.id)
+                )
+
         except Exception as e:
             logger.error(f"Failed to send group msg: {e}")
         return

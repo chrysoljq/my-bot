@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes, MessageHandler, filters
 
 from .client import ptb_app
 from .config import plugin_config
-from .vars import tg2qq, qq2tg
+from plugins.datastore import db
 from .data_source import whitelist_manager
 
 async def tg_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,11 +81,13 @@ async def tg_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Handle Reply
     if msg.reply_to_message:
         reply_id = msg.reply_to_message.message_id
-        # Check if we have a mapping
-        # We have a TG Reply ID, we want the QQ ID it corresponds to.
-        # Use tg2qq (Key: TG ID -> Value: QQ ID)
-        if tg2qq[indx].get(reply_id):
-            qq_id = tg2qq[indx].get(reply_id)
+        # Check database for mapping
+        row = await db.fetchone(
+            "SELECT qq_id FROM tg_msg_map WHERE tg_id = ? AND group_index = ?", 
+            (reply_id, indx)
+        )
+        if row:
+            qq_id = row['qq_id']
             qq_msg = f"[CQ:reply,id={qq_id}] " + qq_msg
 
     # Send to OneBot
@@ -95,10 +97,12 @@ async def tg_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         # Record mapping
         if result and 'message_id' in result:
-            # TG message ID -> QQ message ID
-            tg2qq[indx][msg.message_id] = result['message_id']
-            # QQ message ID -> TG message ID (for reverse usage)
-            qq2tg[indx][result['message_id']] = msg.message_id
+            qq_msg_id = result['message_id']
+            # Save to DB
+            await db.execute(
+                "INSERT INTO tg_msg_map (tg_id, qq_id, group_index) VALUES (?, ?, ?)",
+                (msg.message_id, qq_msg_id, indx)
+            )
              
     except Exception as e:
         logger.error(f"Failed to bridge TG -> QQ: {e}")
@@ -109,3 +113,9 @@ if ptb_app:
     chat_filter = filters.Chat(chat_id=plugin_config.telegram_forward_chat)
     # Using generic ALL types that contain text/media, filtering by chat chat_filter & (~filters.COMMAND)
     ptb_app.add_handler(MessageHandler(chat_filter & (~filters.COMMAND), tg_message_handler))
+
+    # Error Handler
+    async def error_handler_func(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.error(f"Telegram Bot Error: {context.error}", exc_info=context.error)
+
+    ptb_app.add_error_handler(error_handler_func)

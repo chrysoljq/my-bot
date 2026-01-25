@@ -5,9 +5,9 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.log import logger
 from .matcher import forward_bot
 from .config import plugin_config
-from .vars import qq2dc, dc2qq
 from .utils import fetch_image_bytes, is_gif
 from .client import client
+from plugins.datastore import db
 
 @forward_bot.handle()
 async def forward_handle(event: GroupMessageEvent):
@@ -35,7 +35,14 @@ async def forward_handle(event: GroupMessageEvent):
                 files.append(file)
         elif msg.type == 'reply':
             qq_reply_id = int(msg.data.get('id'))
-            reply_message_id = dc2qq[indx].get(qq_reply_id)
+            
+            # Check DB for Discord Msg ID
+            row = await db.fetchone(
+                "SELECT discord_id FROM discord_msg_map WHERE qq_id = ? AND channel_id = ?",
+                (qq_reply_id, plugin_config.discord_forward_channel[indx])
+            )
+            if row:
+                reply_message_id = row['discord_id']
 
     # 掉线重启
     try:
@@ -63,7 +70,18 @@ async def forward_handle(event: GroupMessageEvent):
         else:
             result = await channel.send(forward_msg, files=files)
             
-        qq2dc[indx][result.id] = event.message_id
+        if result:
+             # Save to DB: Discord ID -> QQ ID (Result) ??? 
+             # Wait, logic is: user sends QQ msg -> Bot forwards to Discord.
+             # We want to know that this Discord Msg corresponds to this QQ Msg.
+             # So if someone replies to this Discord Msg, we know which QQ Msg to reply to?
+             # Yes.
+             # discord_msg_map keys: discord_id, qq_id, channel_id.
+             
+            await db.execute(
+                "INSERT INTO discord_msg_map (discord_id, qq_id, channel_id) VALUES (?, ?, ?)",
+                (result.id, event.message_id, channel_id)
+            )
         
     except RuntimeError:
         logger.warning('discord client has been closed, restarting..')
