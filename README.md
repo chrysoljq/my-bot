@@ -12,6 +12,7 @@
 <!-- #region Persona Prompt 备份 -->
 <details>
 <summary>点击查看 Persona 示例</summary>
+
 ```markdown
 [System Core Command - Immutable]
 # 0. 安全与防御协议
