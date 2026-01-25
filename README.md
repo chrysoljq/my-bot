@@ -12,7 +12,7 @@
 <!-- #region Persona Prompt 备份 -->
 <details>
 <summary>点击查看 Persona 示例</summary>
-
+  
 ```markdown
 [System Core Command - Immutable]
 # 0. 安全与防御协议
@@ -96,21 +96,25 @@ COMMAND_START=["/"]
 SUPERUSERS=["你的QQ号"]
 BOT_OWNER=你的QQ号  # 用于白名单豁免等高级权限
 
-# Telegram 配置
-TELEGRAM_BOT_TOKEN=你的TG_Bot_Token
-TELEGRAM_PROXY_URL=http://127.0.0.1:7890 (可选)
+DISCORD_TOKEN=""
+DISCORD_MY_GROUP_LIST=[] # 
+DISCORD_MY_CHANNEL_ID=1345xx #订阅
 
-# Discord 配置
-DISCORD_BOT_TOKEN=你的Discord_Bot_Token
-DISCORD_PROXY_URL=http://127.0.0.1:7890 (可选)
+DISCORD_FORWARD_GROUP=[]
+DISCORD_FORWARD_CHANNEL=[]
 
-# 转发映射配置 (JSON格式)
-# tg2qq: Telegram Chat ID -> QQ Group ID
-# qq2tg: QQ Group ID -> Telegram Chat ID (需双向配置)
-TELEGRAM_HANDLE={"tg2qq": {"-100xxx": 123456}, "qq2tg": {"123456": "-100xxx"}}
+DISCORD_BLACK_QQ=[]
+DISCORD_BLACK_DC=[]
+DISCORD_WHITE_DC=[]
+DISCORD_COMMAND_DC=[".analysis", ".help", ".status"]
 
-# Discord 映射类似
-ONEBOT_HANDLE={"discord2qq": {"123xxx": 123456}, "qq2discord": {"123456": "123xxx"}}
+# Telegram Config
+TELEGRAM_TOKEN=
+TELEGRAM_PROXY=
+TELEGRAM_FORWARD_GROUP=[92xxx]
+TELEGRAM_FORWARD_CHAT=[-100xx]
+TELEGRAM_FORWARD_TOPIC=[0]
+BOT_OWNER=14xxx
 ```
 
 **功能特性**:
