@@ -19,11 +19,11 @@ def get_tools_schema() -> List[Dict[str, Any]]:
                     "properties": {
                         "prompt": {
                             "type": "string",
-                            "description": "The prompt to describe the image."
+                            "description": "描述图片的提示词。例如：\"图片里的物理题怎么解？\""
                         },
                         "url": {
                             "type": "string",
-                            "description": "The URL of the image to view."
+                            "description": "图片的URL，优先选择CQ码的File URL"
                         }
                     },
                     "required": ["prompt", "url"]
@@ -34,22 +34,22 @@ def get_tools_schema() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "summarize_group",
-                "description": "Summarize recent group chat history. Only available for bot owner.",
+                "description": "获取更长的历史信息总结",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "prompt": {
                             "type": "string",
-                            "description": "The prompt to summarize the group."
+                            "description": "描述群聊的提示词。例如：\"总结群聊，包含人物故事线\""
                         },
                         "user_id": {
                            "type": "integer",
-                           "description": "The user ID invoking the command (for permission check)."
+                           "description": "用户ID，仅用户2190481526可用"
                         },
                          "hours": {
                             "type": "integer",
-                            "description": "Hours of history to summarize (default 24).",
-                            "default": 24
+                            "description": "Hours of history to summarize (default 1).",
+                            "default": 1
                         }
                     },
                     "required": ["prompt", "user_id"]
@@ -80,15 +80,56 @@ def get_tools_schema() -> List[Dict[str, Any]]:
                     "required": ["group_id", "user_id", "duration"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "call_bot_api",
+                "description": "直接调用非消息接口的 OneBot V11 API。请提供 api名称 和 参数字典。",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "api_name": {
+                            "type": "string",
+                            "description": "API 名称，例如 'get_group_info', 'send_like' 等。"
+                        },
+                        "api_args_json": {
+                            "type": "string",
+                            "description": "API 参数的 JSON 字符串。例如 '{\"group_id\": 123, \"times\": 10}'"
+                        }
+                    },
+                    "required": ["api_name", "api_args_json"]
+                }
+            }
         }
     ]
 
 # Tool Implementations
 import base64
 import ssl
+from nonebot.adapters.onebot.v11 import Bot
 
 ssl_context = ssl.create_default_context()
 ssl_context.set_ciphers("DEFAULT:@SECLEVEL=1")
+
+import json
+
+async def tool_call_bot_api(bot: Bot, api_name: str, api_args_json: str) -> str:
+    """
+    通用 API 调用工具 (JSON String Mode)
+    """
+    logger.info(f"Tool call_bot_api executing: {api_name} | args_json: {api_args_json}")
+    try:
+        if not api_args_json:
+            api_args = {}
+        else:
+            api_args = json.loads(api_args_json)
+            
+        result = await bot.call_api(api_name, **api_args)
+        return f"[API调用成功] Result: {result}"
+    except Exception as e:
+        logger.error(f"API Call Failed: {e}")
+        return f"[API调用失败] Error: {e}"
 
 async def tool_view_image(prompt: str, url: str) -> str:
     """
@@ -128,8 +169,6 @@ async def tool_view_image(prompt: str, url: str) -> str:
         logger.error(f"Failed to view image: {e}")
         return f"Error viewing image: {e}"
 
-from nonebot.adapters.onebot.v11 import Bot
-
 async def tool_ban_user(bot: Bot, group_id: int, user_id: int, duration: int, reason: str = "") -> str:
     """
     Ban a user.
@@ -153,11 +192,11 @@ async def tool_summarize_group(prompt: str, group_id: int, user_id: int, hours: 
     logger.info(f"Tool summarize_group called for group {group_id} by {user_id}")
     
     # Permission Check
-    if user_id != config_manager.bot_owner_id:
-        return "Permission Denied: Only bot owner can request summary."
+    # if user_id != config_manager.bot_owner_id:
+    #     return "Permission Denied: Only bot owner can request summary."
     
     try:
-        history = await get_chat_history(group_id, limit=200)
+        history = await get_chat_history(group_id, limit=300)
         if not history:
             return "No history found."
         
@@ -179,7 +218,6 @@ async def tool_summarize_group(prompt: str, group_id: int, user_id: int, hours: 
             summary += chunk
             
         return f"[历史总结]: {summary}"
-
     except Exception as e:
         logger.error(f"Failed to summarize: {e}")
         return f"Error gathering summary: {e}"

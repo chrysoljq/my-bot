@@ -13,6 +13,7 @@ async def init_db():
                 nick_name TEXT NOT NULL,
                 user_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
+                message_id INTEGER NOT NULL,
                 content TEXT NOT NULL,
                 timestamp INTEGER NOT NULL
             )
@@ -25,15 +26,15 @@ async def init_db():
     except Exception as e:
         logger.error(f"Failed to initialize ai_chat database: {e}")
 
-async def save_message(group_id: int, nick_name: str, user_id: int, role: str, content: str, timestamp: int):
+async def save_message(group_id: int, nick_name: str, user_id: int, role: str, message_id: int, content: str, timestamp: int):
     try:
         current_time = int(time.time()) if timestamp is None else timestamp
         await db.execute(
             """
-            INSERT INTO ai_chat_messages (group_id, nick_name, user_id, role, content, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO ai_chat_messages (group_id, nick_name, user_id, role, message_id, content, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (group_id, nick_name, user_id, role, content, current_time)
+            (group_id, nick_name, user_id, role, message_id, content, current_time)
         )
     except Exception as e:
         logger.error(f"Failed to save ai_chat message: {e}")
@@ -42,7 +43,7 @@ async def get_chat_history(group_id: int, limit: int = 10) -> List[Dict[str, Any
     try:
         rows = await db.fetchall(
             """
-            SELECT nick_name, user_id, role, content, timestamp 
+            SELECT nick_name, user_id, role, message_id, content, timestamp 
             FROM ai_chat_messages 
             WHERE group_id = ? 
             ORDER BY timestamp DESC 

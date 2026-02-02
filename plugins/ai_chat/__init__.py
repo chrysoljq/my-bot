@@ -4,6 +4,7 @@ from nonebot.adapters.onebot.v11 import Bot, GroupMessageEvent, Message, Message
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
+from nonebot import logger
 import random
 import time
 import json
@@ -12,7 +13,7 @@ from .config import config_manager
 from .models import init_db, save_message, get_chat_history
 from .utils import render_prompt, format_history_message, append_group_memory, load_all_group_memories, save_all_group_memories
 from .openai_client import openai_client
-from .tools import get_tools_schema, tool_view_image, tool_summarize_group, tool_ban_user
+from .tools import get_tools_schema, tool_view_image, tool_summarize_group, tool_ban_user, tool_call_bot_api
 
 __plugin_meta__ = PluginMetadata(
     name="AI Chat",
@@ -68,8 +69,10 @@ async def ai_checker(event: GroupMessageEvent) -> bool:
         (
             event.is_tome() or 
             event.get_plaintext().strip().lower().startswith("ai ") or 
-            random.random() < 0.01 or
-            (random.random() < 0.2 and '怎么' in event.get_plaintext())
+            random.random() < 0.02 or
+            (random.random() < 0.2 and '怎么' in event.get_plaintext()) or
+            (random.random() < 0.2 and '是什么' in event.get_plaintext()) or
+            (random.random() < 0.2 and '为何' in event.get_plaintext())
         )
     )
 
@@ -83,20 +86,18 @@ message_recorder = on_message(rule=recorder_checker, priority=1, block=False)
 async def _(event: GroupMessageEvent):
     if event.user_id == 1878818381: # 跳过本人信息
         return
-    content = str(event.get_message())
+    content = str(event.get_message()).replace('&&amp;', '&')
     if content.lower().startswith("ai "):
         content = content[3:].strip()
 
     nick_name = event.sender.card if event.sender.card else event.sender.nickname
-    await save_message(event.group_id, nick_name, event.user_id, "user", content, int(time.time()))
+    await save_message(event.group_id, nick_name, event.user_id, "user", event.message_id, content, int(time.time()))
 
 # AI Responder (Triggered by Rule)
 ai_message = on_message(rule=ai_checker)
 
 @ai_message.handle()
 async def _(bot: Bot, event: GroupMessageEvent):
-    # Build Context
-    # Build Context
     history = await get_chat_history(event.group_id, limit=50)
     timestamp = int(time.time()) # 把收到请求的时间戳作为回复时间
     
@@ -134,7 +135,10 @@ async def _(bot: Bot, event: GroupMessageEvent):
     # Initial Call
     try:
         final_content, tool_calls_json = await process_stream()
-        
+        if "I should" in final_content:
+            logger.error(f"可能输出了思考内容：{final_content}")
+            return
+        logger.info(f"收到 AI 原始回复: {final_content} {tool_calls_json}")
         # Handle Tool Calls
         if tool_calls_json:
             tool_calls = json.loads(tool_calls_json)
@@ -166,6 +170,12 @@ async def _(bot: Bot, event: GroupMessageEvent):
                         args.get("duration"),
                         args.get("reason", "")
                     )
+                elif func_name == "call_bot_api":
+                    tool_result = await tool_call_bot_api(
+                        bot,
+                        args.get("api_name"),
+                        args.get("api_args_json", "{}")
+                    )
                 
                 messages.append({
                     "role": "tool",
@@ -178,15 +188,24 @@ async def _(bot: Bot, event: GroupMessageEvent):
 
         # Process Final Output (Ban logic etc)
         final_content = final_content.strip()
-        
-        
+
+        # [Safety Filter] Remove visible thought chains / internal monologues
+        # Patterns like: "* Thought", "Wait, I should...", "*Check*"
+        import re
+        # Remove lines starting with * or - (bullet points commonly used in CoT)
+        final_content = re.sub(r'^\s*[\*\-]\s+.*$', '', final_content, flags=re.MULTILINE)
+        # Remove specific "Wait, " prefixes if they appear at start of lines
+        final_content = re.sub(r'^\s*Wait,.*$', '', final_content, flags=re.MULTILINE)
+        # Remove empty lines resulting from cut
+        final_content = "\n".join([line for line in final_content.split('\n') if line.strip()])
+
         # Output final content
         if final_content.startswith("|||"):
             final_content = final_content[3:].strip()
-            
+        final_content = final_content.replace("爬", "滚")
         parts = final_content.split("|||")
         for part in parts:
-            part = part.strip()
+            part = part.strip().rstrip("。")
             if not part:
                 continue
             
@@ -202,8 +221,8 @@ async def _(bot: Bot, event: GroupMessageEvent):
                 # Don't send this part!
                 continue
             
-            await bot.send_group_msg(group_id=event.group_id, message=part)
-            await save_message(event.group_id, "人工质能", event.self_id, "assistant", part, timestamp)
+            result = await bot.send_group_msg(group_id=event.group_id, message=part)
+            await save_message(event.group_id, "人工质能", event.self_id, "assistant", result.get('message_id'), part, timestamp)
 
     except Exception as e:
         await ai_message.finish(f"Error: {e}")

@@ -56,8 +56,21 @@ class OpenAIClient:
                                 break
                             try:
                                 data = json.loads(data_str)
-                                delta = data["choices"][0]["delta"]
+                                if not data.get("choices"):
+                                    continue
                                 
+                                # Check for finish reasons that indicate failure
+                                choice = data["choices"][0]
+                                if choice.get("finish_reason") == "malformed_function_call":
+                                    logger.warning("OpenAI returned malformed_function_call")
+                                    yield "[System: The AI attempted to call a tool but failed to generate valid JSON. (malformed_function_call)]"
+                                
+                                delta = choice["delta"]
+                                
+                                # DEBUG: Trace tool usage
+                                # if "tool_calls" in delta:
+                                #     logger.info(f"DEBUG TOOL RAW: {delta}")
+
                                 # Handle Content
                                 if "content" in delta and delta["content"]:
                                     yield delta["content"]

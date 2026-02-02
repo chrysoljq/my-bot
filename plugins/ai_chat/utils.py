@@ -67,11 +67,7 @@ def append_group_memory(group_id: int, content: str):
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     new_entry = f"[{timestamp}] {content}\n"
     
-    # Update Cache ONLY
-    if group_id in MEMORY_CACHE:
-        MEMORY_CACHE[group_id] += new_entry
-    else:
-        MEMORY_CACHE[group_id] = new_entry
+    MEMORY_CACHE[group_id] = new_entry
 
 def render_prompt(group_id: int) -> str:
     template = load_persona()
@@ -88,4 +84,4 @@ def format_history_message(msg: Dict[str, Any]) -> str:
     if msg['role'] == 'assistant':
         user_str = "风之遗迹(2190481526)"
          
-    return f"[{timestamp}][{user_str}]：{msg['content']}"
+    return f"[{timestamp}][{user_str}][{msg['message_id']}]：{msg['content']}"
